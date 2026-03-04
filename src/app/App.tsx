@@ -3,6 +3,7 @@ import { useFonts } from 'expo-font';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RootNavigator } from '../navigation/RootNavigator';
+import { PeachPulseProvider } from '../state/PeachPulseContext';
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -17,8 +18,10 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <StatusBar style="light" />
-        <RootNavigator />
+        <PeachPulseProvider>
+          <StatusBar style="light" />
+          <RootNavigator />
+        </PeachPulseProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

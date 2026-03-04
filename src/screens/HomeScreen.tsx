@@ -1,15 +1,21 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ScreenContainer } from '../components/layout/ScreenContainer';
 import sayings from '../data/sayings.json';
+import { usePeachPulse } from '../state/PeachPulseContext';
 import { colors } from '../theme/colors';
 
 const peachImage = require('../../assets/pics/finalpeach.png');
 const PEACH_Y_OFFSET = 28;
+const MIN_PRESS_MS = 150;
 
 export function HomeScreen() {
+  const { setPeachPressed } = usePeachPulse();
   const [activeSaying, setActiveSaying] = useState<string>('Bounce the Booty');
+  const [typedSaying, setTypedSaying] = useState<string>('');
+  const [cursorVisible, setCursorVisible] = useState<boolean>(false);
+  const pressStartedAtRef = useRef<number>(0);
 
   const allSayings = useMemo(() => sayings as string[], []);
 
@@ -19,6 +25,46 @@ export function HomeScreen() {
   };
 
   const isBounceLabel = activeSaying === 'Bounce the Booty';
+
+  useEffect(() => {
+    let index = 0;
+    let typingInterval: ReturnType<typeof setInterval> | undefined;
+    setTypedSaying('');
+    setCursorVisible(true);
+
+    const startDelay = setTimeout(() => {
+      typingInterval = setInterval(() => {
+        index += 1;
+        setTypedSaying(activeSaying.slice(0, index));
+
+        if (index >= activeSaying.length) {
+          if (typingInterval) {
+            clearInterval(typingInterval);
+          }
+          setCursorVisible(false);
+        }
+      }, 52);
+    }, 200);
+
+    return () => {
+      clearTimeout(startDelay);
+      if (typingInterval) {
+        clearInterval(typingInterval);
+      }
+    };
+  }, [activeSaying]);
+
+  useEffect(() => {
+    if (typedSaying.length >= activeSaying.length) {
+      return;
+    }
+
+    const cursorInterval = setInterval(() => {
+      setCursorVisible((previous) => !previous);
+    }, 460);
+
+    return () => clearInterval(cursorInterval);
+  }, [typedSaying.length, activeSaying.length]);
 
   return (
     <ScreenContainer>
@@ -30,11 +76,26 @@ export function HomeScreen() {
           style={styles.resultCard}
         >
           <Text style={[styles.result, isBounceLabel && styles.resultBounce]}>
-            {activeSaying}
+            {typedSaying}
+            {cursorVisible ? '|' : ' '}
           </Text>
         </LinearGradient>
 
-        <Pressable onPress={selectRandomSaying} style={styles.peachButton}>
+        <Pressable
+          onPressIn={() => {
+            pressStartedAtRef.current = Date.now();
+            setPeachPressed(true);
+          }}
+          onPressOut={() => {
+            setPeachPressed(false);
+
+            const heldForMs = Date.now() - pressStartedAtRef.current;
+            if (heldForMs >= MIN_PRESS_MS) {
+              selectRandomSaying();
+            }
+          }}
+          style={styles.peachButton}
+        >
           <LinearGradient
             colors={[colors.background, '#FCEBD4', colors.mint]}
             start={{ x: 0, y: 0 }}
@@ -56,9 +117,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
+    position: 'relative',
   },
   peachButton: {
-    marginTop: 12,
+    marginTop: 40,
     borderRadius: 999,
     overflow: 'hidden',
     shadowColor: '#E7BC8B',
@@ -89,14 +151,16 @@ const styles = StyleSheet.create({
     fontFamily: 'MoonFlower',
   },
   resultCard: {
-    marginBottom: 14,
+    position: 'absolute',
+    top: 8,
+    zIndex: 20,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    width: '100%',
-    maxWidth: 360,
+    width: '94%',
+    maxWidth: 390,
   },
   result: {
     color: colors.text,
