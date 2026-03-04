@@ -4,6 +4,8 @@ import { Animated, Easing } from 'react-native';
 type PeachPulseContextValue = {
   motion: Animated.Value;
   setPeachPressed: (pressed: boolean) => void;
+  jellyLevel: number;
+  setJellyLevel: (level: number) => void;
 };
 
 const PeachPulseContext = createContext<PeachPulseContextValue | undefined>(undefined);
@@ -16,6 +18,7 @@ export function PeachPulseProvider({ children }: PeachPulseProviderProps) {
   const motion = useRef(new Animated.Value(0)).current;
   const loopRef = useRef<Animated.CompositeAnimation | null>(null);
   const [isPressed, setIsPressed] = useState(false);
+  const [jellyLevel, setJellyLevel] = useState(3);
 
   useEffect(() => {
     if (isPressed) {
@@ -59,8 +62,10 @@ export function PeachPulseProvider({ children }: PeachPulseProviderProps) {
     () => ({
       motion,
       setPeachPressed: setIsPressed,
+      jellyLevel,
+      setJellyLevel,
     }),
-    [motion]
+    [motion, jellyLevel]
   );
 
   return <PeachPulseContext.Provider value={value}>{children}</PeachPulseContext.Provider>;

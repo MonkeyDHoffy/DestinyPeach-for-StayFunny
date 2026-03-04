@@ -31,7 +31,7 @@ export function ScreenContainer({ children }: ScreenContainerProps) {
 
       <ImageBackground
         source={appBackground}
-        resizeMode="contain"
+        resizeMode="stretch"
         style={styles.background}
         imageStyle={styles.backgroundImage}
       >
