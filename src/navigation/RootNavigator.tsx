@@ -67,8 +67,11 @@ export function RootNavigator() {
           headerRight:
             route.name === 'Home'
               ? () => (
-                  <Pressable onPress={() => navigation.navigate('Menu')}>
-                    <Text style={{ fontSize: 30 }}>🍑</Text>
+                  <Pressable
+                    onPress={() => navigation.navigate('Menu')}
+                    style={styles.headerPeachButton}
+                  >
+                    <Text style={styles.headerPeachEmoji}>Menü</Text>
                   </Pressable>
                 )
               : undefined,
@@ -102,5 +105,20 @@ const styles = StyleSheet.create({
   },
   headerGradientFill: {
     flex: 1,
+  },
+  headerPeachButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 249, 240, 0.92)',
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerPeachEmoji: {
+    fontSize: 22,
+    fontFamily: 'MoonFlower',
+    color: colors.text,
   },
 });

@@ -5,7 +5,16 @@ import { usePeachPulse } from '../state/PeachPulseContext';
 import { colors } from '../theme/colors';
 
 export function MenuScreen() {
-  const { jellyLevel, setJellyLevel } = usePeachPulse();
+  const {
+    jellyLevel,
+    setJellyLevel,
+    soundProfile,
+    setSoundProfile,
+    isMusicMuted,
+    setIsMusicMuted,
+    isSfxMuted,
+    setIsSfxMuted,
+  } = usePeachPulse();
 
   return (
     <LinearGradient
@@ -33,6 +42,61 @@ export function MenuScreen() {
             thumbTintColor={colors.text}
             onValueChange={(value) => setJellyLevel(value)}
           />
+        </View>
+
+        <View style={styles.sliderSection}>
+          <Text style={styles.sliderLabel}>Sounds</Text>
+          <Text style={styles.sliderValue}>
+            Aktiv: {soundProfile === 'classic' ? 'Klassisch' : 'Crazy'}
+          </Text>
+
+          <View style={styles.soundButtonsRow}>
+            <Text
+              onPress={() => setSoundProfile('classic')}
+              style={[
+                styles.soundButton,
+                soundProfile === 'classic' && styles.soundButtonActive,
+              ]}
+            >
+              Klassisch
+            </Text>
+
+            <Text
+              onPress={() => setSoundProfile('crazy')}
+              style={[
+                styles.soundButton,
+                soundProfile === 'crazy' && styles.soundButtonActive,
+              ]}
+            >
+              Crazy
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.sliderSection}>
+          <Text style={styles.sliderLabel}>Audio Mute</Text>
+
+          <View style={styles.soundButtonsRow}>
+            <Text
+              onPress={() => setIsMusicMuted(!isMusicMuted)}
+              style={[
+                styles.soundButton,
+                isMusicMuted && styles.soundButtonActive,
+              ]}
+            >
+              Musik {isMusicMuted ? 'Aus' : 'An'}
+            </Text>
+
+            <Text
+              onPress={() => setIsSfxMuted(!isSfxMuted)}
+              style={[
+                styles.soundButton,
+                isSfxMuted && styles.soundButtonActive,
+              ]}
+            >
+              SFX {isSfxMuted ? 'Aus' : 'An'}
+            </Text>
+          </View>
         </View>
       </View>
     </LinearGradient>
@@ -79,5 +143,24 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 20,
     fontFamily: 'MoonFlower',
+  },
+  soundButtonsRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  soundButton: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    color: colors.text,
+    fontFamily: 'MoonFlower',
+    fontSize: 22,
+  },
+  soundButtonActive: {
+    backgroundColor: '#F2D8B8',
   },
 });

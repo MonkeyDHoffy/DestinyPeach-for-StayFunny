@@ -3,6 +3,7 @@ import { Animated, Image, ImageBackground, Pressable, StyleSheet, Text, View } f
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePeachPulse } from '../../state/PeachPulseContext';
+import React from 'react';
 import { colors } from '../../theme/colors';
 
 const appBackground = require('../../../assets/pics/background.jpg');
@@ -13,7 +14,17 @@ type ScreenContainerProps = {
 };
 
 export function ScreenContainer({ children }: ScreenContainerProps) {
-  const { motion } = usePeachPulse();
+  const { motion, appMode, setAppMode } = usePeachPulse();
+  const [isModePanelOpen, setIsModePanelOpen] = React.useState(false);
+
+  const modeButtonLabel =
+    appMode === 'destiny'
+      ? 'Destiny'
+      : appMode === 'decision'
+        ? 'Decision'
+        : appMode === 'duell'
+          ? 'Duell'
+          : 'Bounce';
 
   const footerShift = motion.interpolate({
     inputRange: [0, 0.5, 1],
@@ -51,12 +62,58 @@ export function ScreenContainer({ children }: ScreenContainerProps) {
           />
         </Animated.View>
 
-        <Pressable style={styles.leftButton}>
-          <Text style={styles.leftButtonText}>Menü</Text>
+        <Pressable style={styles.leftButton} onPress={() => setIsModePanelOpen((prev) => !prev)}>
+          <Text style={styles.leftButtonText}>{modeButtonLabel}</Text>
         </Pressable>
 
         <Image source={footerLogo} resizeMode="contain" style={styles.footerWordmark} />
       </View>
+
+      {isModePanelOpen ? (
+        <View style={styles.modePanel}>
+          <Text style={styles.modePanelTitle}>Modus wählen</Text>
+
+          <Pressable
+            style={[styles.modeOption, appMode === 'destiny' && styles.modeOptionActive]}
+            onPress={() => {
+              setAppMode('destiny');
+              setIsModePanelOpen(false);
+            }}
+          >
+            <Text style={styles.modeOptionText}>Destiny</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.modeOption, appMode === 'decision' && styles.modeOptionActive]}
+            onPress={() => {
+              setAppMode('decision');
+              setIsModePanelOpen(false);
+            }}
+          >
+            <Text style={styles.modeOptionText}>Decision</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.modeOption, appMode === 'duell' && styles.modeOptionActive]}
+            onPress={() => {
+              setAppMode('duell');
+              setIsModePanelOpen(false);
+            }}
+          >
+            <Text style={styles.modeOptionText}>Duell (bald)</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.modeOption, appMode === 'bounce' && styles.modeOptionActive]}
+            onPress={() => {
+              setAppMode('bounce');
+              setIsModePanelOpen(false);
+            }}
+          >
+            <Text style={styles.modeOptionText}>Bounce</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -127,5 +184,38 @@ const styles = StyleSheet.create({
   footerWordmark: {
     width: 140,
     height: 40,
+  },
+  modePanel: {
+    position: 'absolute',
+    left: 16,
+    bottom: 86,
+    width: 220,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: 'rgba(255, 249, 240, 0.96)',
+    padding: 10,
+    gap: 8,
+  },
+  modePanelTitle: {
+    fontFamily: 'MoonFlower',
+    fontSize: 24,
+    color: colors.text,
+  },
+  modeOption: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+  },
+  modeOptionActive: {
+    backgroundColor: '#F2D8B8',
+  },
+  modeOptionText: {
+    fontFamily: 'MoonFlower',
+    color: colors.text,
+    fontSize: 20,
   },
 });

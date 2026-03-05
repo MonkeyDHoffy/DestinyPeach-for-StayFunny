@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Audio } from 'expo-av';
 import {
   Animated,
   Easing,
@@ -11,7 +12,12 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ScreenContainer } from '../components/layout/ScreenContainer';
-import sayings from '../data/sayings.json';
+import {
+  decisionSayings,
+  destinySayings,
+  duellPlaceholderSayings,
+} from '../data/sayingsByMode';
+import { holdSoundsByProfile, releaseSoundsByProfile } from '../data/soundByProfile';
 import { usePeachPulse } from '../state/PeachPulseContext';
 import { colors } from '../theme/colors';
 
@@ -72,7 +78,7 @@ const createHoldWiggleProfile = (jellyScale: number): HoldWiggleProfile => ({
 
 export function HomeScreen() {
   const { width, height } = useWindowDimensions();
-  const { setPeachPressed, jellyLevel } = usePeachPulse();
+  const { setPeachPressed, jellyLevel, appMode, soundProfile, isSfxMuted } = usePeachPulse();
   const [activeSaying, setActiveSaying] = useState<string>('Bounce the Booty');
   const [typedSaying, setTypedSaying] = useState<string>('');
   const [cursorVisible, setCursorVisible] = useState<boolean>(false);
@@ -95,12 +101,29 @@ export function HomeScreen() {
   const peachDriftX = useRef(new Animated.Value(0)).current;
   const peachBaseOffsetY = useRef(new Animated.Value(PEACH_Y_OFFSET)).current;
   const holdWiggleLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+  const releaseSoundRef = useRef<Audio.Sound | null>(null);
+  const holdSoundRef = useRef<Audio.Sound | null>(null);
+  const holdSoundTokenRef = useRef(0);
   const jellyScale = useMemo(() => createJellyScale(jellyLevel), [jellyLevel]);
   const holdWiggleProfileRef = useRef<HoldWiggleProfile>(createHoldWiggleProfile(jellyScale));
 
-  const allSayings = useMemo(() => sayings as string[], []);
+  const allSayings = useMemo(() => {
+    if (appMode === 'decision') {
+      return decisionSayings;
+    }
+
+    if (appMode === 'duell') {
+      return duellPlaceholderSayings;
+    }
+
+    return destinySayings;
+  }, [appMode]);
 
   const selectRandomSaying = () => {
+    if (appMode === 'bounce') {
+      return;
+    }
+
     const randomIndex = Math.floor(Math.random() * allSayings.length);
     setActiveSaying(allSayings[randomIndex]);
     setIsResultVisible(true);
@@ -110,6 +133,20 @@ export function HomeScreen() {
   };
 
   const isBounceLabel = activeSaying === 'Bounce the Booty';
+
+  useEffect(() => {
+    if (appMode === 'bounce') {
+      setIsResultVisible(false);
+      setRequiresDismiss(false);
+      setActiveSaying('Bounce the Booty');
+      setTypedSaying('');
+      return;
+    }
+
+    setActiveSaying('Bounce the Booty');
+    setIsResultVisible(true);
+    setRequiresDismiss(false);
+  }, [appMode]);
 
   const animateTo = (
     value: Animated.Value,
@@ -212,6 +249,97 @@ export function HomeScreen() {
     );
 
     Animated.sequence(jellySequence).start();
+  };
+
+  const playRandomReleaseSound = async () => {
+    if (isSfxMuted) {
+      return;
+    }
+
+    const soundPool = releaseSoundsByProfile[soundProfile];
+    if (!soundPool || soundPool.length === 0) {
+      return;
+    }
+
+    const randomIndex = Math.floor(Math.random() * soundPool.length);
+    const selectedSound = soundPool[randomIndex];
+
+    try {
+      if (releaseSoundRef.current) {
+        await releaseSoundRef.current.unloadAsync();
+        releaseSoundRef.current = null;
+      }
+
+      const { sound } = await Audio.Sound.createAsync(selectedSound, {
+        shouldPlay: true,
+      });
+      releaseSoundRef.current = sound;
+    } catch {
+    }
+  };
+
+  const playRandomHoldSound = async () => {
+    if (isSfxMuted) {
+      return;
+    }
+
+    const token = holdSoundTokenRef.current;
+    const soundPool = holdSoundsByProfile[soundProfile];
+    if (!soundPool || soundPool.length === 0) {
+      return;
+    }
+
+    const randomIndex = Math.floor(Math.random() * soundPool.length);
+    const selectedSound = soundPool[randomIndex];
+
+    try {
+      if (holdSoundRef.current) {
+        await holdSoundRef.current.unloadAsync();
+        holdSoundRef.current = null;
+      }
+
+      const { sound } = await Audio.Sound.createAsync(selectedSound, {
+        shouldPlay: true,
+        isLooping: true,
+        volume: 0.15,
+      });
+
+      if (token !== holdSoundTokenRef.current) {
+        await sound.unloadAsync();
+        return;
+      }
+
+      holdSoundRef.current = sound;
+    } catch {
+    }
+  };
+
+  const stopHoldSound = async () => {
+    if (!holdSoundRef.current) {
+      return;
+    }
+
+    try {
+      await holdSoundRef.current.stopAsync();
+      await holdSoundRef.current.unloadAsync();
+    } catch {
+    } finally {
+      holdSoundRef.current = null;
+    }
+  };
+
+  const stopReleaseSound = async () => {
+    if (!releaseSoundRef.current) {
+      return;
+    }
+
+    try {
+      await releaseSoundRef.current.stopAsync();
+      await releaseSoundRef.current.unloadAsync();
+    } catch {
+    } finally {
+      releaseSoundRef.current = null;
+    }
   };
 
   useEffect(() => {
@@ -346,6 +474,16 @@ export function HomeScreen() {
       }
     };
   }, [activeSaying]);
+
+  useEffect(() => {
+    if (!isSfxMuted) {
+      return;
+    }
+
+    holdSoundTokenRef.current += 1;
+    void stopHoldSound();
+    void stopReleaseSound();
+  }, [isSfxMuted]);
 
   useEffect(() => {
     if (typedSaying.length >= activeSaying.length) {
@@ -501,6 +639,14 @@ export function HomeScreen() {
       if (holdWiggleLoopRef.current) {
         holdWiggleLoopRef.current.stop();
       }
+
+      if (releaseSoundRef.current) {
+        releaseSoundRef.current.unloadAsync();
+      }
+
+      if (holdSoundRef.current) {
+        holdSoundRef.current.unloadAsync();
+      }
     };
   }, [holdWiggleLoopRef]);
 
@@ -519,11 +665,11 @@ export function HomeScreen() {
   return (
     <ScreenContainer>
       <View style={styles.centerArea}>
-        {isResultVisible ? (
+        {isResultVisible && appMode !== 'bounce' ? (
           <Pressable style={styles.resultBackdrop} onPress={() => dismissResultCard('y', -1)} />
         ) : null}
 
-        {isResultVisible ? (
+        {isResultVisible && appMode !== 'bounce' ? (
           <Animated.View
             {...resultCardPanResponder.panHandlers}
             style={[
@@ -554,6 +700,8 @@ export function HomeScreen() {
             holdWiggleProfileRef.current = createHoldWiggleProfile(jellyScale);
             setPeachPressed(true);
             setIsPressingPeach(true);
+            holdSoundTokenRef.current += 1;
+            void playRandomHoldSound();
 
             if (bubbleStopTimeoutRef.current) {
               clearTimeout(bubbleStopTimeoutRef.current);
@@ -565,6 +713,10 @@ export function HomeScreen() {
           onPressOut={() => {
             setPeachPressed(false);
             setIsPressingPeach(false);
+            holdSoundTokenRef.current += 1;
+            void stopHoldSound();
+
+            void playRandomReleaseSound();
 
             bubbleStopTimeoutRef.current = setTimeout(() => {
               setBubbleActive(false);
@@ -573,11 +725,11 @@ export function HomeScreen() {
             const heldForMs = Date.now() - pressStartedAtRef.current;
             runPeachBounce(heldForMs);
 
-            if (heldForMs >= MIN_PRESS_MS) {
+            if (heldForMs >= MIN_PRESS_MS && appMode !== 'bounce') {
               selectRandomSaying();
             }
           }}
-          disabled={requiresDismiss && isResultVisible}
+          disabled={appMode !== 'bounce' && requiresDismiss && isResultVisible}
           style={styles.peachButton}
         >
           <Animated.View
