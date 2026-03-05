@@ -1,8 +1,10 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import Slider from '@react-native-community/slider';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { usePeachPulse } from '../state/PeachPulseContext';
 import { colors } from '../theme/colors';
+
+const footerLogo = require('../../assets/pics/print.png');
 
 export function MenuScreen() {
   const {
@@ -24,9 +26,6 @@ export function MenuScreen() {
       style={styles.container}
     >
       <View style={styles.card}>
-        <Text style={styles.title}>Menü</Text>
-        <Text style={styles.item}>- Start</Text>
-        <Text style={styles.item}>- Einstellungen</Text>
         <Text style={styles.item}>- Über</Text>
 
         <View style={styles.sliderSection}>
@@ -99,6 +98,11 @@ export function MenuScreen() {
           </View>
         </View>
       </View>
+
+      <View style={styles.footer}>
+        <Text style={styles.footerLink}>www.hoffja.de</Text>
+        <Image source={footerLogo} resizeMode="contain" style={styles.footerWordmark} />
+      </View>
     </LinearGradient>
   );
 }
@@ -108,6 +112,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingVertical: 24,
+    paddingBottom: 110,
   },
   card: {
     backgroundColor: 'rgba(255, 249, 240, 0.86)',
@@ -162,5 +167,28 @@ const styles = StyleSheet.create({
   },
   soundButtonActive: {
     backgroundColor: '#F2D8B8',
+  },
+  footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 74,
+    paddingHorizontal: 16,
+    backgroundColor: '#F9E9D1',
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  footerLink: {
+    color: colors.text,
+    fontFamily: 'MoonFlower',
+    fontSize: 26,
+  },
+  footerWordmark: {
+    width: 140,
+    height: 40,
   },
 });

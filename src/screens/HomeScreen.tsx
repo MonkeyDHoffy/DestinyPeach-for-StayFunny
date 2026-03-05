@@ -51,7 +51,14 @@ type HoldWiggleProfile = {
   durationB: number;
 };
 
-const randomRadius = () => Math.floor(Math.random() * 90) + 150;
+const CIRCLE_RADII: BubbleRadii = {
+  borderTopLeftRadius: 999,
+  borderTopRightRadius: 999,
+  borderBottomLeftRadius: 999,
+  borderBottomRightRadius: 999,
+};
+
+const randomRadius = () => Math.floor(Math.random() * 28) + 168;
 
 const randomRadii = (): BubbleRadii => ({
   borderTopLeftRadius: randomRadius(),
@@ -61,6 +68,9 @@ const randomRadii = (): BubbleRadii => ({
 });
 
 const randomBetween = (min: number, max: number) => Math.random() * (max - min) + min;
+
+const lerp = (start: number, end: number, progress: number) =>
+  start + (end - start) * progress;
 
 const createJellyScale = (jellyLevel: number) => {
   const normalized = (jellyLevel - 1) / 5;
@@ -87,7 +97,9 @@ export function HomeScreen() {
   const [requiresDismiss, setRequiresDismiss] = useState(false);
   const [bubbleActive, setBubbleActive] = useState(false);
   const [bubbleColorIndex, setBubbleColorIndex] = useState(0);
-  const [bubbleRadii, setBubbleRadii] = useState<BubbleRadii>(randomRadii());
+  const [bubbleRadii, setBubbleRadii] = useState<BubbleRadii>(CIRCLE_RADII);
+  const bubbleRadiiRef = useRef<BubbleRadii>(CIRCLE_RADII);
+  const bubbleRadiiTweenRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pressStartedAtRef = useRef<number>(0);
   const requiresDismissRef = useRef(false);
   const bubbleStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -169,9 +181,14 @@ export function HomeScreen() {
     const firstTilt = randomBetween(5, 10) * holdFactor * direction;
     const firstDrift = randomBetween(4, 10) * direction;
     const squash = randomBetween(0.12, 0.22) * holdFactor;
-    const tailDuration = 1000 + holdProgress * 1000;
-    const extraOscillations = Math.round(holdProgress * 2 + (jellyLevel >= 6 ? 2 : 0));
-    const totalOscillations = 4 + extraOscillations;
+    const isExtremeJelly = jellyLevel >= 6;
+    const tailDuration = isExtremeJelly
+      ? randomBetween(3000, 6000)
+      : randomBetween(1200, 2400) + holdProgress * 900;
+    const totalOscillations = isExtremeJelly
+      ? 10 + Math.round(holdProgress * 5)
+      : 5 + Math.round(holdProgress * 3) + Math.max(0, jellyLevel - 3);
+    const oscillationDecay = isExtremeJelly ? 0.76 : 0.64;
 
     peachBounceY.stopAnimation();
     peachSquashX.stopAnimation();
@@ -195,12 +212,15 @@ export function HomeScreen() {
       ]),
     ];
 
-    const baseTailStepDuration = Math.max(125, tailDuration / (totalOscillations + 1));
+    const baseTailStepDuration = Math.max(
+      isExtremeJelly ? 220 : 140,
+      tailDuration / (totalOscillations + 1)
+    );
 
     for (let index = 0; index < totalOscillations; index += 1) {
-      const decay = Math.pow(0.62, index + 1);
+      const decay = Math.pow(oscillationDecay, index + 1);
       const side = index % 2 === 0 ? -1 : 1;
-      const stepDuration = Math.round(baseTailStepDuration + index * 10);
+      const stepDuration = Math.round(baseTailStepDuration + index * (isExtremeJelly ? 14 : 10));
 
       jellySequence.push(
         Animated.parallel([
@@ -498,9 +518,47 @@ export function HomeScreen() {
   }, [typedSaying.length, activeSaying.length]);
 
   useEffect(() => {
+    const setNextBubbleRadii = (nextRadii: BubbleRadii) => {
+      bubbleRadiiRef.current = nextRadii;
+      setBubbleRadii(nextRadii);
+    };
+
+    const animateBubbleRadiiToCircle = (duration = 170) => {
+      if (bubbleRadiiTweenRef.current) {
+        clearInterval(bubbleRadiiTweenRef.current);
+        bubbleRadiiTweenRef.current = null;
+      }
+
+      const startRadii = bubbleRadiiRef.current;
+      const startedAt = Date.now();
+
+      bubbleRadiiTweenRef.current = setInterval(() => {
+        const elapsed = Date.now() - startedAt;
+        const progress = Math.min(1, elapsed / duration);
+        const eased = 1 - Math.pow(1 - progress, 3);
+
+        setNextBubbleRadii({
+          borderTopLeftRadius: lerp(startRadii.borderTopLeftRadius, CIRCLE_RADII.borderTopLeftRadius, eased),
+          borderTopRightRadius: lerp(startRadii.borderTopRightRadius, CIRCLE_RADII.borderTopRightRadius, eased),
+          borderBottomLeftRadius: lerp(startRadii.borderBottomLeftRadius, CIRCLE_RADII.borderBottomLeftRadius, eased),
+          borderBottomRightRadius: lerp(startRadii.borderBottomRightRadius, CIRCLE_RADII.borderBottomRightRadius, eased),
+        });
+
+        if (progress >= 1) {
+          if (bubbleRadiiTweenRef.current) {
+            clearInterval(bubbleRadiiTweenRef.current);
+            bubbleRadiiTweenRef.current = null;
+          }
+
+          setNextBubbleRadii(CIRCLE_RADII);
+        }
+      }, 16);
+    };
+
     if (!bubbleActive) {
       bubbleSpin.stopAnimation();
       bubbleSpin.setValue(0);
+      animateBubbleRadiiToCircle();
       return;
     }
 
@@ -516,7 +574,7 @@ export function HomeScreen() {
     rotation.start();
 
     const morphInterval = setInterval(() => {
-      setBubbleRadii(randomRadii());
+      setNextBubbleRadii(randomRadii());
     }, 1000);
 
     const colorInterval = setInterval(() => {
@@ -529,6 +587,11 @@ export function HomeScreen() {
       bubbleSpin.setValue(0);
       clearInterval(morphInterval);
       clearInterval(colorInterval);
+
+      if (bubbleRadiiTweenRef.current) {
+        clearInterval(bubbleRadiiTweenRef.current);
+        bubbleRadiiTweenRef.current = null;
+      }
     };
   }, [bubbleActive, bubbleSpin]);
 
@@ -647,6 +710,10 @@ export function HomeScreen() {
       if (holdSoundRef.current) {
         holdSoundRef.current.unloadAsync();
       }
+
+      if (bubbleRadiiTweenRef.current) {
+        clearInterval(bubbleRadiiTweenRef.current);
+      }
     };
   }, [holdWiggleLoopRef]);
 
@@ -658,6 +725,18 @@ export function HomeScreen() {
   const peachRotate = peachTilt.interpolate({
     inputRange: [-25, 25],
     outputRange: ['-25deg', '25deg'],
+  });
+
+  const peachCircleScaleX = peachSquashX.interpolate({
+    inputRange: [0.6, 1, 1.6],
+    outputRange: [0.88, 1, 1.14],
+    extrapolate: 'clamp',
+  });
+
+  const peachCircleScaleY = peachSquashY.interpolate({
+    inputRange: [0.6, 1, 1.6],
+    outputRange: [0.88, 1, 1.14],
+    extrapolate: 'clamp',
   });
 
   const peachTranslateY = Animated.add(peachBaseOffsetY, peachBounceY);
@@ -736,6 +815,10 @@ export function HomeScreen() {
             style={[
               styles.peachGradient,
               bubbleRadii,
+              {
+                backgroundColor: BUBBLE_COLORS[bubbleColorIndex],
+                transform: [{ scaleX: peachCircleScaleX }, { scaleY: peachCircleScaleY }],
+              },
             ]}
           >
             <Animated.View
@@ -785,11 +868,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     position: 'relative',
+    overflow: 'visible',
   },
   peachButton: {
     marginTop: 40,
     borderRadius: 999,
-    overflow: 'hidden',
+    overflow: 'visible',
     shadowColor: '#E7BC8B',
     shadowOpacity: 0.25,
     shadowOffset: { width: 0, height: 6 },

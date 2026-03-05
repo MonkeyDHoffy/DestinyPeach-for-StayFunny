@@ -34,7 +34,7 @@ export function PeachPulseProvider({ children }: PeachPulseProviderProps) {
   const motion = useRef(new Animated.Value(0)).current;
   const loopRef = useRef<Animated.CompositeAnimation | null>(null);
   const [isPressed, setIsPressed] = useState(false);
-  const [jellyLevel, setJellyLevel] = useState(3);
+  const [jellyLevel, setJellyLevel] = useState(6);
   const [appMode, setAppMode] = useState<AppMode>('destiny');
   const [soundProfile, setSoundProfile] = useState<SoundProfile>('classic');
   const [isMusicMuted, setIsMusicMuted] = useState(false);
