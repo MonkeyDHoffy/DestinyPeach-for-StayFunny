@@ -34,6 +34,7 @@ const BUBBLE_COLORS = [
   '#a1e7ef',
   '#8cffdf',
 ];
+const RELEASE_PARTICLE_COLORS = [colors.surface, '#FFFFFF', colors.peachLight];
 
 type BubbleRadii = {
   borderTopLeftRadius: number;
@@ -49,6 +50,29 @@ type HoldWiggleProfile = {
   squash: number;
   durationA: number;
   durationB: number;
+};
+
+type ReleaseParticle = {
+  id: number;
+  originX: number;
+  originY: number;
+  size: number;
+  color: string;
+  translateX: Animated.Value;
+  translateY: Animated.Value;
+  opacity: Animated.Value;
+  scale: Animated.Value;
+};
+
+type CloudPuff = {
+  id: number;
+  x: number;
+  y: number;
+  size: number;
+  translateX: Animated.Value;
+  translateY: Animated.Value;
+  opacity: Animated.Value;
+  scale: Animated.Value;
 };
 
 const CIRCLE_RADII: BubbleRadii = {
@@ -93,26 +117,36 @@ export function HomeScreen() {
   const [typedSaying, setTypedSaying] = useState<string>('');
   const [cursorVisible, setCursorVisible] = useState<boolean>(false);
   const [isPressingPeach, setIsPressingPeach] = useState(false);
-  const [isResultVisible, setIsResultVisible] = useState(true);
+  const [isResultVisible, setIsResultVisible] = useState(false);
   const [requiresDismiss, setRequiresDismiss] = useState(false);
   const [bubbleActive, setBubbleActive] = useState(false);
   const [bubbleColorIndex, setBubbleColorIndex] = useState(0);
   const [bubbleRadii, setBubbleRadii] = useState<BubbleRadii>(CIRCLE_RADII);
+  const [releaseParticles, setReleaseParticles] = useState<ReleaseParticle[]>([]);
+  const [resultCloudPuffs, setResultCloudPuffs] = useState<CloudPuff[]>([]);
+  const [showResultCloud, setShowResultCloud] = useState(false);
   const bubbleRadiiRef = useRef<BubbleRadii>(CIRCLE_RADII);
   const bubbleRadiiTweenRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pressStartedAtRef = useRef<number>(0);
+  const pressPointRef = useRef({ x: 180, y: 180 });
   const requiresDismissRef = useRef(false);
   const bubbleStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const releaseParticleCleanupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resultCloudCleanupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const particleIdRef = useRef(0);
   const bubbleSpin = useRef(new Animated.Value(0)).current;
   const resultTranslateX = useRef(new Animated.Value(0)).current;
   const resultTranslateY = useRef(new Animated.Value(0)).current;
+  const resultRevealProgress = useRef(new Animated.Value(1)).current;
   const peachBounceY = useRef(new Animated.Value(0)).current;
   const peachSquashX = useRef(new Animated.Value(1)).current;
   const peachSquashY = useRef(new Animated.Value(1)).current;
+  const peachIdleScale = useRef(new Animated.Value(1)).current;
   const peachTilt = useRef(new Animated.Value(0)).current;
   const peachDriftX = useRef(new Animated.Value(0)).current;
   const peachBaseOffsetY = useRef(new Animated.Value(PEACH_Y_OFFSET)).current;
   const holdWiggleLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+  const idlePulseLoopRef = useRef<Animated.CompositeAnimation | null>(null);
   const releaseSoundRef = useRef<Audio.Sound | null>(null);
   const holdSoundRef = useRef<Audio.Sound | null>(null);
   const holdSoundTokenRef = useRef(0);
@@ -131,6 +165,144 @@ export function HomeScreen() {
     return destinySayings;
   }, [appMode]);
 
+  const spawnReleaseParticles = (originX: number, originY: number) => {
+    if (releaseParticleCleanupTimeoutRef.current) {
+      clearTimeout(releaseParticleCleanupTimeoutRef.current);
+      releaseParticleCleanupTimeoutRef.current = null;
+    }
+
+    const particles = Array.from({ length: 24 }, () => {
+      const angle = randomBetween(0, Math.PI * 2);
+      const distance = randomBetween(40, 122);
+      const duration = Math.round(randomBetween(460, 860));
+      const size = Math.round(randomBetween(8, 18));
+      const color =
+        RELEASE_PARTICLE_COLORS[
+          Math.floor(Math.random() * RELEASE_PARTICLE_COLORS.length)
+        ];
+
+      const particle: ReleaseParticle = {
+        id: particleIdRef.current,
+        originX,
+        originY,
+        size,
+        color,
+        translateX: new Animated.Value(0),
+        translateY: new Animated.Value(0),
+        opacity: new Animated.Value(1),
+        scale: new Animated.Value(1),
+      };
+
+      particleIdRef.current += 1;
+
+      Animated.parallel([
+        Animated.timing(particle.translateX, {
+          toValue: Math.cos(angle) * distance,
+          duration,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(particle.translateY, {
+          toValue: Math.sin(angle) * distance,
+          duration,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(particle.opacity, {
+          toValue: 0,
+          duration,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(particle.scale, {
+          toValue: 0.12,
+          duration,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      return particle;
+    });
+
+    setReleaseParticles(particles);
+    releaseParticleCleanupTimeoutRef.current = setTimeout(() => {
+      setReleaseParticles([]);
+      releaseParticleCleanupTimeoutRef.current = null;
+    }, 980);
+  };
+
+  const runResultRevealCloud = () => {
+    if (resultCloudCleanupTimeoutRef.current) {
+      clearTimeout(resultCloudCleanupTimeoutRef.current);
+      resultCloudCleanupTimeoutRef.current = null;
+    }
+
+    const puffs = Array.from({ length: 18 }, () => {
+      const size = Math.round(randomBetween(30, 86));
+
+      const puff: CloudPuff = {
+        id: particleIdRef.current,
+        x: randomBetween(-6, 326),
+        y: randomBetween(-10, 84),
+        size,
+        translateX: new Animated.Value(0),
+        translateY: new Animated.Value(0),
+        opacity: new Animated.Value(1),
+        scale: new Animated.Value(0.32),
+      };
+
+      particleIdRef.current += 1;
+
+      Animated.parallel([
+        Animated.timing(puff.translateX, {
+          toValue: randomBetween(-34, 34),
+          duration: 360,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(puff.translateY, {
+          toValue: randomBetween(-42, -12),
+          duration: 360,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(puff.opacity, {
+          toValue: 0,
+          duration: 360,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(puff.scale, {
+          toValue: 1.9,
+          duration: 360,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      return puff;
+    });
+
+    setResultCloudPuffs(puffs);
+    setShowResultCloud(true);
+    resultRevealProgress.setValue(0);
+
+    Animated.timing(resultRevealProgress, {
+      toValue: 1,
+      duration: 280,
+      delay: 160,
+      easing: Easing.out(Easing.back(1.25)),
+      useNativeDriver: true,
+    }).start();
+
+    resultCloudCleanupTimeoutRef.current = setTimeout(() => {
+      setShowResultCloud(false);
+      setResultCloudPuffs([]);
+      resultCloudCleanupTimeoutRef.current = null;
+    }, 620);
+  };
+
   const selectRandomSaying = () => {
     if (appMode === 'bounce') {
       return;
@@ -142,6 +314,7 @@ export function HomeScreen() {
     setRequiresDismiss(true);
     resultTranslateX.setValue(0);
     resultTranslateY.setValue(0);
+    runResultRevealCloud();
   };
 
   const isBounceLabel = activeSaying === 'Bounce the Booty';
@@ -152,12 +325,17 @@ export function HomeScreen() {
       setRequiresDismiss(false);
       setActiveSaying('Bounce the Booty');
       setTypedSaying('');
+      setShowResultCloud(false);
+      setResultCloudPuffs([]);
+      setReleaseParticles([]);
+      resultRevealProgress.setValue(1);
       return;
     }
 
     setActiveSaying('Bounce the Booty');
-    setIsResultVisible(true);
+    setIsResultVisible(false);
     setRequiresDismiss(false);
+    resultRevealProgress.setValue(1);
   }, [appMode]);
 
   const animateTo = (
@@ -694,13 +872,65 @@ export function HomeScreen() {
   ]);
 
   useEffect(() => {
+    if (isPressingPeach) {
+      if (idlePulseLoopRef.current) {
+        idlePulseLoopRef.current.stop();
+        idlePulseLoopRef.current = null;
+      }
+
+      peachIdleScale.stopAnimation();
+      peachIdleScale.setValue(1);
+      return;
+    }
+
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(peachIdleScale, {
+          toValue: 1.04,
+          duration: 1080,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(peachIdleScale, {
+          toValue: 1,
+          duration: 1080,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    idlePulseLoopRef.current = pulseLoop;
+    pulseLoop.start();
+
+    return () => {
+      pulseLoop.stop();
+      if (idlePulseLoopRef.current === pulseLoop) {
+        idlePulseLoopRef.current = null;
+      }
+    };
+  }, [isPressingPeach, peachIdleScale]);
+
+  useEffect(() => {
     return () => {
       if (bubbleStopTimeoutRef.current) {
         clearTimeout(bubbleStopTimeoutRef.current);
       }
 
+      if (releaseParticleCleanupTimeoutRef.current) {
+        clearTimeout(releaseParticleCleanupTimeoutRef.current);
+      }
+
+      if (resultCloudCleanupTimeoutRef.current) {
+        clearTimeout(resultCloudCleanupTimeoutRef.current);
+      }
+
       if (holdWiggleLoopRef.current) {
         holdWiggleLoopRef.current.stop();
+      }
+
+      if (idlePulseLoopRef.current) {
+        idlePulseLoopRef.current.stop();
       }
 
       if (releaseSoundRef.current) {
@@ -740,6 +970,13 @@ export function HomeScreen() {
   });
 
   const peachTranslateY = Animated.add(peachBaseOffsetY, peachBounceY);
+  const shouldDismissOnPeachPress = appMode !== 'bounce' && requiresDismiss && isResultVisible;
+  const resultCardRevealScale = resultRevealProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.8, 1],
+    extrapolate: 'clamp',
+  });
+  const resultCardFinalOpacity = Animated.multiply(resultCardOpacity, resultRevealProgress);
 
   return (
     <ScreenContainer>
@@ -748,33 +985,18 @@ export function HomeScreen() {
           <Pressable style={styles.resultBackdrop} onPress={() => dismissResultCard('y', -1)} />
         ) : null}
 
-        {isResultVisible && appMode !== 'bounce' ? (
-          <Animated.View
-            {...resultCardPanResponder.panHandlers}
-            style={[
-              styles.resultCard,
-              {
-                opacity: resultCardOpacity,
-                transform: [{ translateX: resultTranslateX }, { translateY: resultTranslateY }],
-              },
-            ]}
-          >
-            <LinearGradient
-              colors={[colors.surface, '#FFF4E6']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.resultCardGradient}
-            >
-              <Text style={[styles.result, isBounceLabel && styles.resultBounce]}>
-                {typedSaying}
-                {cursorVisible ? '|' : ' '}
-              </Text>
-            </LinearGradient>
-          </Animated.View>
-        ) : null}
-
         <Pressable
-          onPressIn={() => {
+          onPressIn={(event) => {
+            if (shouldDismissOnPeachPress) {
+              dismissResultCard('y', -1);
+              return;
+            }
+
+            pressPointRef.current = {
+              x: event.nativeEvent.locationX,
+              y: event.nativeEvent.locationY,
+            };
+
             pressStartedAtRef.current = Date.now();
             holdWiggleProfileRef.current = createHoldWiggleProfile(jellyScale);
             setPeachPressed(true);
@@ -790,12 +1012,17 @@ export function HomeScreen() {
             setBubbleActive(true);
           }}
           onPressOut={() => {
+            if (shouldDismissOnPeachPress) {
+              return;
+            }
+
             setPeachPressed(false);
             setIsPressingPeach(false);
             holdSoundTokenRef.current += 1;
             void stopHoldSound();
 
             void playRandomReleaseSound();
+            spawnReleaseParticles(pressPointRef.current.x, pressPointRef.current.y);
 
             bubbleStopTimeoutRef.current = setTimeout(() => {
               setBubbleActive(false);
@@ -808,7 +1035,6 @@ export function HomeScreen() {
               selectRandomSaying();
             }
           }}
-          disabled={appMode !== 'bounce' && requiresDismiss && isResultVisible}
           style={styles.peachButton}
         >
           <Animated.View
@@ -847,6 +1073,7 @@ export function HomeScreen() {
                       { rotate: peachRotate },
                       { scaleX: peachSquashX },
                       { scaleY: peachSquashY },
+                      { scale: peachIdleScale },
                     ],
                   },
                 ]}
@@ -854,8 +1081,86 @@ export function HomeScreen() {
               />
               <Text style={styles.peachHint}>Bounce the Booty</Text>
             </View>
+
+            <View pointerEvents="none" style={styles.releaseParticlesLayer}>
+              {releaseParticles.map((particle) => (
+                <Animated.View
+                  key={particle.id}
+                  style={[
+                    styles.releaseParticle,
+                    {
+                      left: particle.originX - particle.size / 2,
+                      top: particle.originY - particle.size / 2,
+                      width: particle.size,
+                      height: particle.size,
+                      backgroundColor: particle.color,
+                      opacity: particle.opacity,
+                      transform: [
+                        { translateX: particle.translateX },
+                        { translateY: particle.translateY },
+                        { scale: particle.scale },
+                      ],
+                    },
+                  ]}
+                />
+              ))}
+            </View>
           </Animated.View>
         </Pressable>
+
+        {showResultCloud && appMode !== 'bounce' ? (
+          <View pointerEvents="none" style={styles.resultCloudLayer}>
+            {resultCloudPuffs.map((puff) => (
+              <Animated.View
+                key={puff.id}
+                style={[
+                  styles.resultCloudPuff,
+                  {
+                    left: puff.x,
+                    top: puff.y,
+                    width: puff.size,
+                    height: puff.size,
+                    opacity: puff.opacity,
+                    transform: [
+                      { translateX: puff.translateX },
+                      { translateY: puff.translateY },
+                      { scale: puff.scale },
+                    ],
+                  },
+                ]}
+              />
+            ))}
+          </View>
+        ) : null}
+
+        {isResultVisible && appMode !== 'bounce' ? (
+          <Animated.View
+            {...resultCardPanResponder.panHandlers}
+            style={[
+              styles.resultCard,
+              {
+                opacity: resultCardFinalOpacity,
+                transform: [
+                  { translateX: resultTranslateX },
+                  { translateY: resultTranslateY },
+                  { scale: resultCardRevealScale },
+                ],
+              },
+            ]}
+          >
+            <LinearGradient
+              colors={[colors.surface, '#FFF4E6']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.resultCardGradient}
+            >
+              <Text style={[styles.result, isBounceLabel && styles.resultBounce]}>
+                {typedSaying}
+                {cursorVisible ? '|' : ' '}
+              </Text>
+            </LinearGradient>
+          </Animated.View>
+        ) : null}
       </View>
     </ScreenContainer>
   );
@@ -871,6 +1176,8 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   peachButton: {
+    position: 'relative',
+    zIndex: 11,
     marginTop: 40,
     borderRadius: 999,
     overflow: 'visible',
@@ -894,6 +1201,14 @@ const styles = StyleSheet.create({
   peachGradientInner: {
     flex: 1,
   },
+  releaseParticlesLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 20,
+  },
+  releaseParticle: {
+    position: 'absolute',
+    borderRadius: 999,
+  },
   peachContentLayer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -913,9 +1228,9 @@ const styles = StyleSheet.create({
     fontFamily: 'MoonFlower',
   },
   resultCard: {
+    zIndex: 12,
     position: 'absolute',
-    top: 8,
-    zIndex: 20,
+    bottom: 36,
     overflow: 'hidden',
     borderRadius: 12,
     width: '94%',
@@ -923,7 +1238,22 @@ const styles = StyleSheet.create({
   },
   resultBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 15,
+    zIndex: 10,
+  },
+  resultCloudLayer: {
+    position: 'absolute',
+    bottom: 36,
+    zIndex: 13,
+    width: '94%',
+    maxWidth: 390,
+    height: 120,
+    overflow: 'visible',
+    pointerEvents: 'none',
+  },
+  resultCloudPuff: {
+    position: 'absolute',
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
   },
   resultCardGradient: {
     borderWidth: 1,

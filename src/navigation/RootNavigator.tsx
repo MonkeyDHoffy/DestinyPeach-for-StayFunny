@@ -58,9 +58,13 @@ export function RootNavigator() {
           headerBackground: () => <HeaderGradientBackground />,
           headerTitleStyle: {
             color: colors.text,
-            fontWeight: 'bold',
-            fontFamily: 'MoonFlower',
-            fontSize: 34,
+            fontWeight: 'normal',
+            fontFamily: 'UrbanBlocker',
+            fontSize: 40,
+            letterSpacing: 0.4,
+            textShadowColor: 'rgba(255, 255, 255, 0.85)',
+            textShadowOffset: { width: 0, height: 1 },
+            textShadowRadius: 6,
           },
           headerTintColor: '#C88647',
           contentStyle: { backgroundColor: colors.background },
@@ -80,7 +84,7 @@ export function RootNavigator() {
         <Stack.Screen
           name="Home"
           component={HomeScreen}
-          options={{ title: 'Destiny Booty' }}
+          options={{ title: 'Bounce the Booty' }}
         />
         <Stack.Screen
           name="Menu"
@@ -107,6 +111,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerPeachButton: {
+    marginRight: 10,
     width: 48,
     height: 48,
     borderRadius: 12,
